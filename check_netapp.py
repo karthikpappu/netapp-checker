@@ -84,7 +84,7 @@ class NetappChecker (object):
 
     def nagiosperdata(self, label, value, warn, crit, max=None):
         if max:
-            nagiosperfdata = "{}={};{};{};{}".format(label, value, warn, crit, max)
+            nagiosperfdata = "{}={};{};{};{};{}".format(label, value, warn, crit, 0, max)
         else:
             nagiosperfdata = "{}={};{};{}".format(label, value, warn, crit)
         return nagiosperfdata
@@ -96,9 +96,10 @@ class NetappChecker (object):
         }
 
         # if maxvalue in perfdata make percent out of it
-        if crit < kwargs["value"]:
-            crit = (kwargs["maxvalue"] * crit) / 100
-            warn = (kwargs["maxvalue"] * warn) / 100
+        if "value" in kwargs:
+            if len(str(kwargs["value"])) > 3 and "maxvalue" in kwargs:
+                crit = (kwargs["maxvalue"] * crit) / 100
+                warn = (kwargs["maxvalue"] * warn) / 100
 
 
         if status is None and warn and crit:
@@ -133,14 +134,15 @@ class NetappChecker (object):
 
     def nodeperf(self, host, metrictype=None):
         metrics = self.netapp.getnodemetrics(host)
+        crit = self.args.critical
+        warn = self.args.warning
         result = []
         for n in range(len(metrics)):
             metname = metrics[n]["name"]
             metunit = metrics[n]["unit"]
             metvalue = metrics[n]["samples"][0]["value"]
             if self.types[self.args.metrictype] in metrics[n]["name"]:
-                result.append(self.nagiosstatus("{}.{}".format(metrics[n]["name"], metunit), None, label=metname,
-                                                value=metvalue, unit=metunit))
+                result.append(self.nagiosstatus("{}.{}".format(metrics[n]["name"], metunit), warn, crit, label=metname, value=metvalue, unit=metunit))
         # this is for testing purpose
         if self.args.verbose:
             for i in range(len(result)):
@@ -162,7 +164,7 @@ class NetappChecker (object):
                                                 None, label=metname, value=metvalue, unit=self.args.unit))
             elif self.args.unit == "bytes":
                 metname = agrrs[n]["name"]
-                metvalue = agrrs[n]["size_avail"]
+                metvalue = agrrs[n]["size_used"]
                 metvaluemax = agrrs[n]["size_total"]
                 result.append(self.nagiosstatus("{}.{}".format(metname, "bytes"), self.args.warning, self.args.critical,
                                                 None, label=metname, value=metvalue,
@@ -180,15 +182,17 @@ class NetappChecker (object):
         :return: stdout string
         """
         node = self.netapp.getnodeinfo(host)
+        warn = self.args.warning
+        crit = self.args.critical
         if not node:
-            self.nagiosstatus("Host {} not find".format(host), 3)
+            self.nagiosstatus("Host {} not find".format(host), warn, crit, 3)
             print(self.parser.format_help())
         if not node["is_node_healthy"]:
-            self.nagiosstatus("node is unhealthy", 1)
+            self.nagiosstatus("node is unhealthy", warn, crit, 1)
             print("REPORT:")
             print(self.netapp.showallitems(node, 1))
         else:
-            self.nagiosstatus("Host {} is healthy !".format(host), 0)
+            self.nagiosstatus("Host {} is healthy !".format(host), warn, crit, 0)
 
     def __call__(self, *args, **kwargs):
         self.argument()
