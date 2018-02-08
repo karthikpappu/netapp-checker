@@ -10,8 +10,8 @@ class NetappChecker (object):
     def __init__(self):
         self.modes = {
             "nodeperf": self.nodeperf,
-            "aggrperf": self.aggrperf,
-            "volumeperf": self.volumeperf,
+            "aggrperf": self.storageperf,
+            "volumeperf": self.storageperf,
             "healthmode": self.healthmode,
         }
         self.types = {
@@ -153,51 +153,39 @@ class NetappChecker (object):
         self.printoutput(gstatus)
         exit(gstatus["status"])
 
-    def aggrperf(self, host):
+    def returnperf(self, perfdict):
+        metname = perfdict.get("name")
+        if self.args.unit == "%":
+            valueunit = "in_perc"
+            metvalue = perfdict.get("size_used_percent")
+            metvaluemax = 0
+        elif self.args.unit == "bytes":
+            valueunit = "bytes"
+            metvalue = perfdict.get("size_used")
+            metvaluemax = perfdict.get("size_total")
+
+        return self.nagiosstatus("{}.{}".format(metname, valueunit), self.args.warning, self.args.critical,
+                                 None, label=metname, value=metvalue,
+                                 maxvalue=metvaluemax, unit=self.args.unit)
+
+
+    def storageperf(self, host):
         hostinfo = self.netapp.getnodeinfo(host)
         agrrs = self.netapp.getaggregatesbynode(hostinfo["key"])
         result = []
-        for n in agrrs:
-            metname = n.get("name")
-            if self.args.unit == "%":
-                metvalue = n.get("size_used_percent")
-                result.append(self.nagiosstatus("{}.{}".format(metname, "in_perc"), self.args.warning, self.args.critical,
-                                                None, label=metname, value=metvalue, unit=self.args.unit))
-            elif self.args.unit == "bytes":
-                metvalue = n.get("size_used")
-                metvaluemax = n.get("size_total")
-                result.append(self.nagiosstatus("{}.{}".format(metname, "bytes"), self.args.warning, self.args.critical,
-                                                None, label=metname, value=metvalue,
-                                                maxvalue=metvaluemax, unit=self.args.unit))
+        if self.args.mode == "aggrperf":
+            for n in agrrs:
+                result.append(self.returnperf(n))
+        elif self.args.mode == "volumeperf":
+            for i in agrrs:
+                vols = self.netapp.getvolumesbyaggr(i.get("key"))
+                for vol in vols:
+                    result.append(self.returnperf(vol))
 
         gstatus = self.checkstatus(result)
         self.printoutput(gstatus)
         exit(gstatus["status"])
 
-    def volumeperf(self, host):
-        hostinfo = self.netapp.getnodeinfo(host)
-        agrrs = self.netapp.getaggregatesbynode(hostinfo["key"])
-        result = []
-        for i in agrrs:
-            vols = self.netapp.getvolumesbyaggr(i.get("key"))
-            for vol in vols:
-                metname = vol.get("name")
-                if self.args.unit == "%":
-                    metvalue = vol.get("size_used_percent")
-                    result.append(
-                        self.nagiosstatus("{}.{}".format(metname, "in_perc"), self.args.warning, self.args.critical,
-                                          None, label=metname, value=metvalue, unit=self.args.unit))
-                elif self.args.unit == "bytes":
-                    metvalue = vol.get("size_used")
-                    metvaluemax = vol.get("size_total")
-                    result.append(
-                        self.nagiosstatus("{}.{}".format(metname, "bytes"), self.args.warning, self.args.critical,
-                                          None, label=metname, value=metvalue,
-                                          maxvalue=metvaluemax, unit=self.args.unit))
-
-        gstatus = self.checkstatus(result)
-        self.printoutput(gstatus)
-        exit(gstatus["status"])
 
     def healthmode(self, host):
         """
