@@ -34,6 +34,7 @@ class NetappChecker (object):
         self.parser.add_argument('-c', dest='critical', type=int, default=0, help="Critical level")
         self.parser.add_argument('-d', dest='disk', type=str, help="Disk")
         self.parser.add_argument('-u', dest='unit', type=str, help="unit to display ( %, bytes)")
+        self.parser.add_argument('-n', dest='name', type=str, help="name of volume you wanna check")
         self.parser.add_argument('-t', dest='metrictype', type=str, help="Choose the type of metric you wanna return "
                                                                          "( ha, network, cpu_busy, cpu_elapsed_time, ops,"
                                                                          " nfs, throughput, fcp, system )")
@@ -179,8 +180,13 @@ class NetappChecker (object):
         elif self.args.mode == "volumeperf":
             for i in agrrs:
                 vols = self.netapp.getvolumesbyaggr(i.get("key"))
-                for vol in vols:
-                    result.append(self.returnperf(vol))
+                if not self.args.name:
+                    for vol in vols:
+                        result.append(self.returnperf(vol))
+                else:
+                    for vol in vols:
+                        if vol.get("name") == self.args.name:
+                            result.append(self.returnperf(vol))
 
         gstatus = self.checkstatus(result)
         self.printoutput(gstatus)
